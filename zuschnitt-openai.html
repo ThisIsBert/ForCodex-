@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>21:9 Bildzuschnitt</title>
   <style>
-    body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #f0f0f0; font-family: sans-serif; }
-    #container { position: relative; width: 2000px; height: 857px; background: #ddd; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: grab; }
+
+    body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; overflow: auto; background: #f0f0f0; font-family: sans-serif; }
+    #container { position: relative; width: 1000px; height: 428px; background: #ddd; overflow: hidden; border-radius: 8px; border: 1px solid #888; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: grab; }
+
     #container.dragging { cursor: grabbing; }
     canvas { display: block; user-select: none; pointer-events: none; }
     #placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #666; font-size: 1.2rem; pointer-events: none; text-align: center; }
