@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>21:9 Bildzuschnitt</title>
+  <style>
+    body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #f0f0f0; font-family: sans-serif; }
+    #container { position: relative; width: 80vw; max-width: 1200px; aspect-ratio: 21/9; background: #ddd; overflow: hidden; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: grab; }
+    #container.dragging { cursor: grabbing; }
+    canvas { display: block; user-select: none; pointer-events: none; }
+    #controls { margin-top: 1rem; display: flex; gap: 1rem; }
+    button { padding: 0.5rem 1rem; border: none; border-radius: 4px; background: #007acc; color: white; font-size: 1rem; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #005fa3; }
+    #fileInput { display: none; }
+  </style>
+</head>
+<body>
+  <div id="container" tabindex="0">
+    <canvas id="canvas"></canvas>
+  </div>
+  <div id="controls">
+    <button id="loadBtn">Bild laden</button>
+    <button id="saveBtn" disabled>Speichern</button>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" />
+
+  <script>
+    const container = document.getElementById('container');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const loadBtn = document.getElementById('loadBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    let img = new Image(), scale = 1, minScale = 1, offsetX = 0, offsetY = 0;
+    let isDragging = false, startX = 0, startY = 0, filename = '';
+
+    function resizeCanvas() {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function loadImageFile(file) {
+      const reader = new FileReader();
+      reader.onload = e => initImage(e.target.result, file.name);
+      reader.readAsDataURL(file);
+    }
+    function loadImageURL(url) {
+      initImage(url, url.split('/').pop());
+    }
+    function initImage(src, name) {
+      img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        minScale = Math.max(canvas.width/img.width, canvas.height/img.height);
+        scale = minScale;
+        offsetX = (canvas.width - img.width*scale)/2;
+        offsetY = (canvas.height - img.height*scale)/2;
+        draw(); saveBtn.disabled = false;
+      };
+      img.src = src;
+      filename = name.replace(/\.[^/.]+$/, '');
+    }
+    function draw() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if(img.src) ctx.drawImage(img, offsetX, offsetY, img.width*scale, img.height*scale);
+    }
+
+    loadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => loadImageFile(fileInput.files[0]));
+
+    container.addEventListener('dragover', e => { e.preventDefault(); container.classList.add('dragging'); });
+    container.addEventListener('dragleave', () => container.classList.remove('dragging'));
+    container.addEventListener('drop', e => {
+      e.preventDefault(); container.classList.remove('dragging');
+      const dt = e.dataTransfer;
+      // Dateien
+      if(dt.files && dt.files.length) {
+        loadImageFile(dt.files[0]);
+        return;
+      }
+      // externe URL (bild von anderem Tab)
+      let url = dt.getData('text/uri-list') || dt.getData('text/plain');
+      if(url && (url.match(/\.(jpe?g|png|gif|webp)(\?|$)/i))) {
+        loadImageURL(url);
+        return;
+      }
+      // HTML-Snippet
+      let html = dt.getData('text/html');
+      if(html) {
+        const div = document.createElement('div'); div.innerHTML = html;
+        const imgEl = div.querySelector('img');
+        if(imgEl && imgEl.src) loadImageURL(imgEl.src);
+      }
+    });
+
+    container.addEventListener('paste', e => {
+      const items = e.clipboardData.items;
+      for(let item of items) {
+        if(item.kind==='file'&&item.type.startsWith('image/')){
+          loadImageFile(item.getAsFile());return;
+        }
+      }
+    });
+
+    container.addEventListener('mousedown', e => {
+      if(!img.src) return;
+      isDragging = true; startX = e.clientX - offsetX; startY = e.clientY - offsetY;
+      container.classList.add('dragging');
+    });
+    window.addEventListener('mousemove', e => {
+      if(isDragging) {
+        offsetX = e.clientX - startX; offsetY = e.clientY - startY;
+        offsetX = Math.min(0, Math.max(offsetX, canvas.width-img.width*scale));
+        offsetY = Math.min(0, Math.max(offsetY, canvas.height-img.height*scale));
+        draw();
+      }
+    });
+    window.addEventListener('mouseup', () => { isDragging=false; container.classList.remove('dragging'); });
+
+    container.addEventListener('wheel', e => {
+      if(!img.src) return; e.preventDefault();
+      const oldScale=scale, delta=-e.deltaY*0.001;
+      scale=Math.max(minScale, scale*(1+delta));
+      const rect=container.getBoundingClientRect();
+      const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+      offsetX=mx-(mx-offsetX)*(scale/oldScale);
+      offsetY=my-(my-offsetY)*(scale/oldScale);
+      offsetX=Math.min(0,Math.max(offsetX,canvas.width-img.width*scale));
+      offsetY=Math.min(0,Math.max(offsetY,canvas.height-img.height*scale));
+      draw();
+    });
+
+    saveBtn.addEventListener('click', ()=>{
+      const out=document.createElement('canvas'); out.width=canvas.width; out.height=canvas.height;
+      const octx=out.getContext('2d'); octx.drawImage(img, offsetX, offsetY, img.width*scale, img.height*scale);
+      out.toBlob(blob=>{
+        const link=document.createElement('a');
+        link.download=filename+'_zuschnitt.jpg';
+        link.href=URL.createObjectURL(blob); link.click(); URL.revokeObjectURL(link.href);
+      },'image/jpeg');
+    });
+
+    container.focus();
+  </script>
+</body>
+</html>
